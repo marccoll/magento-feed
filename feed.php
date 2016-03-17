@@ -3,12 +3,17 @@
 set_time_limit(0);
 require_once '../app/Mage.php';
 umask(0);
-Mage::app('default');
-//Mage::app(Mage::app()->getStore()->getCode());
+Mage::app();
+
+$storeID = $_GET['store'];
+$currency = $_GET['currency'];
+
+$baseCurrencyCode = Mage::app()->getStore($storeID)->getBaseCurrencyCode(); 
 
 try {
 
-    $products = Mage::getModel('catalog/product')->getCollection();
+    //$products = Mage::getModel('catalog/product')->getCollection();
+    $products = Mage::getResourceModel('catalog/product_collection')->setStore($storeID);
     $products->addAttributeToFilter('status', 1);// get enabled prod
     $prodIds = $products->getAllIds();
 
@@ -42,9 +47,20 @@ try {
         $prodData['url'] = $productUrl;
 
         // price
-        $prodData['price'] = $product->getPrice();
-        if ($product->getSpecialPrice()) {
-            $prodData['old_price'] = $product->getSpecialPrice();
+        if(isset($currency)){
+            $prodData['currency'] = $currency;
+            $price = $product->getPrice();
+            $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency); 
+            if ($product->getSpecialPrice()) {
+                $old_price = $product->getSpecialPrice();
+                $prodData['old_price'] = Mage::helper('directory')->currencyConvert($old_price, $baseCurrencyCode, $currency); 
+            }
+        }else{
+            $prodData['currency'] = $baseCurrencyCode;
+            $prodData['price'] = $product->getPrice();
+            if ($product->getSpecialPrice()) {
+                $prodData['old_price'] = $product->getSpecialPrice();
+            }
         }
 
         // brand
@@ -68,11 +84,14 @@ try {
         $prodData['image_urls'] = $images;
 
         // sizes
-        $size = $product->getAttributeText('size');
-        if($size){
-            $prodData['sizes'] = [$size];
+        $attr = Mage::getResourceModel('catalog/eav_attribute')->loadByCode('catalog_product','size');
+        if($attr->getId()){
+            $size = $product->getAttributeText('size');
+            if($size){
+                $prodData['sizes'] = [$size];
+            }
         }
-
+        
         // colors
         $color = $product->getAttributeText('color');
         if($color){
