@@ -4,6 +4,7 @@
 - Check stores.php to see al store info.
 
 
+
 TODO:
 - Wrap script into real magento module
 - Config page for module params
