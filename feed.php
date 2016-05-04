@@ -20,7 +20,6 @@ if($key == $_GET['key']){
       $products = Mage::getResourceModel('catalog/product_collection')->setStore($storeID);
       $products->addAttributeToFilter('status', 1);// get enabled prod
       $prodIds = $products->getAllIds();
-  
       
       $prods = array();
   
@@ -31,8 +30,8 @@ if($key == $_GET['key']){
           $prodData = array();
 
           $prodData['storeId'] = $storeID;
-          $prodData['title'] = $product->getName();
-          $prodData['description'] = strip_tags($product->getDescription());
+          $prodData['title'] = str_replace( '"', '\"', $product->getName() );
+          $prodData['description'] = str_replace( '"', '\"', strip_tags($product->getDescription()) );
   
           // get parent product ID if exist and get url of parent
           $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
@@ -79,7 +78,7 @@ if($key == $_GET['key']){
           }
   
           // brand
-          $brand = $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product);
+          $brand = str_replace( '"', '\"', $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product));
           if($brand != 'No'){
               $prodData['brand'] = $brand;
           }
@@ -114,7 +113,7 @@ if($key == $_GET['key']){
             // colors
             $color = $product->getAttributeText('color');
             if($color){
-                $prodData['colors'] = [$color];
+                $prodData['colors'] = [str_replace( '"', '\"', $color)];
             }
     
             // stocks
@@ -141,7 +140,7 @@ if($key == $_GET['key']){
   
           foreach ($product->getCategoryIds() as $_categoryId) {
               $category = Mage::getModel('catalog/category')->load($_categoryId);
-              array_push($prodData['categories'], $category->getName());
+              array_push(str_replace( '"', '\"', $prodData['categories'], $category->getName()));
           }
   
           // don't push grouped parent prods
