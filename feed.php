@@ -15,24 +15,24 @@ $baseCurrencyCode = Mage::app()->getStore($storeID)->getBaseCurrencyCode();
 if($key == $_GET['key']){
 
   try {
-  
+
       //$products = Mage::getModel('catalog/product')->getCollection();
       $products = Mage::getResourceModel('catalog/product_collection')->setStore($storeID);
       $products->addAttributeToFilter('status', 1);// get enabled prod
       $prodIds = $products->getAllIds();
-      
+
       $prods = array();
-  
+
       foreach ($prodIds as $productId) {
           $product = Mage::getModel('catalog/product');
           $product->load($productId);
-  
+
           $prodData = array();
 
           $prodData['storeId'] = $storeID;
-          $prodData['title'] = str_replace( '"', '\"', $product->getName() );
-          $prodData['description'] = str_replace( '"', '\"', strip_tags($product->getDescription()) );
-  
+          $prodData['title'] = str_replace( '"', '', $product->getName() );
+          $prodData['description'] = str_replace( '"', '', strip_tags($product->getDescription()) );
+
           // get parent product ID if exist and get url of parent
           $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
           $groupedParentsIds = Mage::getResourceSingleton('catalog/product_link')
@@ -51,14 +51,14 @@ if($key == $_GET['key']){
           }
           $prodData['artno'] = '' . $artno;
           $prodData['url'] = $url;
-  
-  
+
+
           // barcodes
           $barcode = '' . intval($product->getSku());
           if($barcode){
             $prodData['barcodes'] = [$barcode];
           }
-  
+
           // price
           if(isset($currency)){
               $prodData['currency'] = $currency;
@@ -67,7 +67,7 @@ if($key == $_GET['key']){
               if ($product->getSpecialPrice()) {
                   $prodData['old_price'] = $prodData['price'];
                   $price = Mage::helper('tax')->getPrice($product, $product->getSpecialPrice());
-                  $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency); 
+                  $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency);
               }
           }else{
               $prodData['currency'] = $baseCurrencyCode;
@@ -76,9 +76,9 @@ if($key == $_GET['key']){
                   $prodData['old_price'] = $product->getSpecialPrice();
               }
           }
-  
+
           // brand
-          $brand = str_replace( '"', '\"', $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product));
+          $brand = str_replace( '"', '', $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product));
           if($brand != 'No'){
               $prodData['brand'] = $brand;
           }
@@ -97,7 +97,7 @@ if($key == $_GET['key']){
           if(count($childConfigProducts[0]) > 1){
             $isParent = true;
           }
-  
+
           if(!$isParent){
             // sizes
             foreach ($sizeAttrNames as $attrName) {
@@ -109,13 +109,13 @@ if($key == $_GET['key']){
                 }
               }
             }
-            
+
             // colors
             $color = $product->getAttributeText('color');
             if($color){
-                $prodData['colors'] = [str_replace( '"', '\"', $color)];
+                $prodData['colors'] = [str_replace( '"', '', $color)];
             }
-    
+
             // stocks
             $stock = round($product->getStockItem()->getQty(), 0);
             $stockData = array();
@@ -134,24 +134,24 @@ if($key == $_GET['key']){
             }
             $prodData['stocks'] = $stockData;
           }
-  
+
           // categories
           $prodData['categories'] = array();
-  
+
           foreach ($product->getCategoryIds() as $_categoryId) {
               $category = Mage::getModel('catalog/category')->load($_categoryId);
-              array_push(str_replace( '"', '\"', $prodData['categories'], $category->getName()));
+              array_push(str_replace( '"', '', $prodData['categories'], $category->getName()));
           }
-  
+
           // don't push grouped parent prods
           if($product->getTypeId() != 'grouped'){
-            array_push($prods, $prodData);  
+            array_push($prods, $prodData);
           }
-          
+
       }
-  
+
       echo utf8_encode(json_encode($prods));
-  
+
   } catch(Exception $e) {
       die($e->getMessage());
   }
@@ -171,7 +171,7 @@ function getImages($prodID){
       'attribute' => new Varien_Object(array('id' => $attributeId))
   ));
   $gallery = $backend->loadGallery($p, $container);
-    
+
   $images = array();
   foreach ($gallery as $image) {
     array_push($images, Mage::getBaseUrl(Mage_Core_Model_Store::URL_TYPE_MEDIA) . 'catalog/product' . $image['file']);
