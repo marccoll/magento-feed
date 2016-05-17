@@ -30,8 +30,8 @@ if($key == $_GET['key']){
           $prodData = array();
 
           $prodData['storeId'] = $storeID;
-          $prodData['title'] = str_replace( '"', '', $product->getName() );
-          $prodData['description'] = str_replace( '"', '', strip_tags($product->getDescription()) );
+          $prodData['title'] = $product->getName();
+          $prodData['description'] = strip_tags($product->getDescription());
 
           // get parent product ID if exist and get url of parent
           $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
@@ -78,11 +78,11 @@ if($key == $_GET['key']){
           }
 
           // brand
-          $brand = str_replace( '"', '', $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product));
+          $brand = $product->getResource()->getAttribute('manufacturer')->getFrontend()->getValue($product);
           if($brand != 'No'){
               $prodData['brand'] = $brand;
           }
-  
+
           // images
           $images = getImages($productId);
           if(count($images) == 0){
@@ -105,7 +105,7 @@ if($key == $_GET['key']){
               if($attr->getId()){
                 $size = $product->getAttributeText($attrName);
                 if($size){
-                    $prodData['sizes'] = [utf8_encode($size)];
+                    $prodData['sizes'] = [$size];
                 }
               }
             }
@@ -113,7 +113,7 @@ if($key == $_GET['key']){
             // colors
             $color = $product->getAttributeText('color');
             if($color){
-                $prodData['colors'] = [str_replace( '"', '', $color)];
+                $prodData['colors'] = [$color];
             }
 
             // stocks
@@ -140,7 +140,7 @@ if($key == $_GET['key']){
 
           foreach ($product->getCategoryIds() as $_categoryId) {
               $category = Mage::getModel('catalog/category')->load($_categoryId);
-              array_push(str_replace( '"', '', $prodData['categories'], $category->getName()));
+              array_push($prodData['categories'], $category->getName());
           }
 
           // don't push grouped parent prods
@@ -150,7 +150,7 @@ if($key == $_GET['key']){
 
       }
 
-      echo utf8_encode(json_encode($prods));
+      echo json_encode($prods);
 
   } catch(Exception $e) {
       die($e->getMessage());
