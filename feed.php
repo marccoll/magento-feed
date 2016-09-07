@@ -30,8 +30,8 @@ if($key == $_GET['key']){
           $prodData = array();
 
           $prodData['storeId'] = $storeID;
-          $prodData['title'] = $product->getName();
-          $prodData['description'] = strip_tags($product->getDescription());
+          $prodData['title'] = html_entity_decode(strip_tags($product->getName()));
+          $prodData['description'] = html_entity_decode(strip_tags($product->getDescription()));
 
           // get parent product ID if exist and get url of parent
           $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
