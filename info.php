@@ -56,7 +56,8 @@ foreach($attributes as $a){
   }
   break;
 }
-echo "Attributes: <pre>". json_encode($attributeArray) ."</pre>";
+echo "Attributes: <pre>". json_encode($attributeArray) ."</pre><br>";
+echo "Config: <pre>". json_encode($sizeAttrNames) . "</pre>";
 
 
 
