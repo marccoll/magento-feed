@@ -2,18 +2,22 @@
 require_once './config.php';
 
 set_time_limit(0);
-require_once $magePath;
+require_once MAGE_PATH;
 umask(0);
 #ini_set('memory_limit', '512M'); // possibly more by default -- look at parameters of your server (RAM)
 Mage::app();
 
-$storeID = isset($_GET['store'])?$_GET['store']:0;
+// load frontend event to get price calculation right
+Mage::app()->loadAreaPart(Mage_Core_Model_App_Area::AREA_FRONTEND,Mage_Core_Model_App_Area::PART_EVENTS);
+
+$storeID  = isset($_GET['store']) ? $_GET['store'] : 0;
 $currency = $_GET['currency'];
 
 $baseCurrencyCode = Mage::app()->getStore($storeID)->getBaseCurrencyCode();
 
 $_filename = 'feed_prods.json';
 $_pidFile = '/tmp/feed_export_products.pid';
+if ($_GET['force'] == 'true') unlink($_pidFile);
 
 if (file_exists($_pidFile)) {
     die('Process already running! Wait.'.PHP_EOL);
@@ -22,8 +26,6 @@ if (file_exists($_pidFile)) {
 }
 
 $lastProductId = 0;
-$sizeLimit = 100;
-
 if($key == $_GET['key'])
 {
     $file = new Varien_Io_File();
@@ -36,9 +38,11 @@ if($key == $_GET['key'])
 
     do {
         try {
-            $result = getProducts();
-
-            $file->streamWrite(json_encode($result));
+            // batch load 100 products at a time
+            $result = getProducts(100);
+            if ($result !== false) {
+              $file->streamWrite(json_encode($result));
+            }
         } catch (Exception $ex) {
             unlink($_pidFile);
             die($ex->getMessage());
@@ -81,17 +85,16 @@ function getImages($prodID){
         array_push($images, Mage::getBaseUrl(Mage_Core_Model_Store::URL_TYPE_MEDIA) . 'catalog/product' . $image['file']);
     }
     return $images;
-    //return ['hola', 'images'];
 }
 
-function getProducts() {
-    global $storeID, $currency, $baseCurrencyCode, $sizeLimit, $lastProductId;
+function getProducts($batchSize) {
+    global $storeID, $currency, $baseCurrencyCode, $lastProductId, $sizeAttrNames;
 
     $products = Mage::getResourceModel('catalog/product_collection')->setStore($storeID);
     $products->addAttributeToFilter('status', 1);// get enabled prod
     $products->addFieldToFilter('entity_id', array('gt' => $lastProductId));
     $products->setOrder('entity_id', Varien_Data_Collection::SORT_ORDER_ASC);
-    $products->setPageSize($sizeLimit)->load();
+    $products->setPageSize($batchSize)->load();
 
     $prodIds = $products->getLoadedIds();
 
@@ -112,44 +115,59 @@ function getProducts() {
         // get parent product ID if exist and get url of parent
         $parentIds = Mage::getResourceSingleton('catalog/product_type_configurable')->getParentIdsByChild($productId);
         $groupedParentsIds = Mage::getResourceSingleton('catalog/product_link')
-            ->getParentIdsByChild($productId, Mage_Catalog_Model_Product_Link::LINK_TYPE_GROUPED);
+          ->getParentIdsByChild($productId, Mage_Catalog_Model_Product_Link::LINK_TYPE_GROUPED);
+
         if($parentIds){
             $artno = intval($parentIds[0]);
             $url =  Mage::getModel('catalog/product')->load($artno)->getUrlInStore();
+
         }else if($groupedParentsIds){
             $artno = intval($groupedParentsIds[0]);
             $_p = Mage::getModel('catalog/product')->load($artno);
-            $url =  $_p->getUrlInStore();
-            $prodData['title'] = $_p->getName();
+            $url = $_p->getUrlInStore();
+
+            // use title and description from parent
+            $prodData['title'] = html_entity_decode(strip_tags($_p->getName()));
+            $prodData['description'] = html_entity_decode(strip_tags($_p->getDescription()));
+
         }else{
             $artno = intval($productId);
             $url = $product->getUrlInStore();
         }
-        $prodData['artno'] = '' . $artno;
-        $prodData['url'] = $url;
+        $prodData['artno'] = '' . $artno; // this is magento product_id
+        $prodData['url'] = str_replace("feed.php/", "", $url);
 
-
-        // barcodes
-        $barcode = '' . intval($product->getSku());
-        if($barcode){
-            $prodData['barcodes'] = [$barcode];
-        }
+        // barcodes (SKU)
+        $barcode = '' . $product->getSku();
+        if($barcode){ $prodData['barcodes'] = [$barcode]; }
 
         // price
         if(isset($currency)){
             $prodData['currency'] = $currency;
-            $price = Mage::helper('tax')->getPrice($product, $product->getFinalPrice());
+            $price = Mage::helper('tax')->getPrice($product, $product->getPrice()); // getFinalPrice do not seems to work
             $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency);
-            if ($product->getSpecialPrice()) {
-                $prodData['old_price'] = $prodData['price'];
-                $price = Mage::helper('tax')->getPrice($product, $product->getSpecialPrice());
-                $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency);
+            $specialPrice = $product->getSpecialPrice();
+            if ($specialPrice) {
+                $fromDate = new DateTime($product->getData('special_from_date'));
+                $rawToDate = $product->getData('special_to_date');
+                $toDate = new DateTime($rawToDate ? $rawToDate : '3000-01-01');
+                $today = new DateTime();
+                if ($today->getTimestamp() >= $fromDate->getTimestamp() &&
+                    $today->getTimestamp() <= $toDate->getTimestamp()){
+                  $oldPrice = Mage::helper('tax')->getPrice($product, $product->getPrice());
+                  $prodData['old_price'] = Mage::helper('directory')->currencyConvert($oldPrice, $baseCurrencyCode, $currency);
+                  $price = Mage::helper('tax')->getPrice($product, $specialPrice);
+                  $prodData['price'] = Mage::helper('directory')->currencyConvert($price, $baseCurrencyCode, $currency);
+                }
             }
+
         }else{
             $prodData['currency'] = $baseCurrencyCode;
             $prodData['price'] = $product->getPrice();
-            if ($product->getSpecialPrice()) {
-                $prodData['old_price'] = $product->getSpecialPrice();
+            $specialPrice = $product->getSpecialPrice();
+            if ($specialPrice) {
+                $prodData['old_price'] = $product->getPrice();
+                $prodData['price'] = $product->getSpecialPrice();
             }
         }
 
@@ -173,7 +191,7 @@ function getProducts() {
         if(count($childConfigProducts[0]) > 1){
             $isParent = true;
         }
-
+        $prodData['is_parent'] = $isParent;
         if(!$isParent){
             // sizes
             if (isset($sizeAttrNames) && is_array($sizeAttrNames)){
@@ -187,6 +205,16 @@ function getProducts() {
                     }
                 }
             }
+
+            /* $attributes = Mage::getModel('catalog/product')->getAttributes(); */
+            /* $attributeArray = array(); */
+            /* foreach($attributes as $a){ */
+            /*   foreach ($a->getEntityType()->getAttributeCodes() as $attributeName) { */
+            /*     array_push($attributeArray, $attributeName); */
+            /*   } */
+            /*   break; */
+            /* } */
+            /* $prodData['attr'] = $attributeArray; */
 
             // colors
             $color = $product->getAttributeText('color');
